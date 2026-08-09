@@ -3,11 +3,11 @@ package fr.maxboudier.poulpifyauto.car.screens
 import androidx.car.app.CarContext
 import androidx.car.app.model.Action
 import androidx.car.app.model.CarIcon
+import androidx.car.app.model.GridItem
+import androidx.car.app.model.GridTemplate
 import androidx.car.app.model.Header
+import androidx.car.app.model.ItemList
 import androidx.car.app.model.MessageTemplate
-import androidx.car.app.model.Pane
-import androidx.car.app.model.PaneTemplate
-import androidx.car.app.model.Row
 import androidx.car.app.model.Template
 import androidx.core.graphics.drawable.IconCompat
 import fr.maxboudier.poulpifyauto.core.data.QrCodeGenerator
@@ -15,59 +15,53 @@ import fr.maxboudier.poulpifyauto.core.model.PoulpifyUiState
 
 /**
  * QR code d'invitation, généré à la volée depuis l'URL réellement configurée.
- * L'ancienne version affichait un PNG figé dans les ressources, qui devenait
- * faux dès que l'URL du serveur changeait.
+ *
+ * `GridTemplate` à un seul élément en `ITEM_SIZE_LARGE` plutôt qu'un
+ * `PaneTemplate` : c'est le plus grand rendu qu'autorise la bibliothèque de
+ * templates. La taille finale reste décidée par le système de la voiture et non
+ * par la résolution du bitmap — l'écran du téléphone demeure la surface la plus
+ * sûre pour faire scanner un passager.
  */
 class InviteScreen(carContext: CarContext) : PoulpifyScreen(carContext) {
 
     override fun stateKey(state: PoulpifyUiState): Any = state.shareUrl ?: ""
 
     override fun onGetTemplate(): Template {
-        val url = state.shareUrl
-            ?: return MessageTemplate.Builder("Aucune session configurée sur le téléphone.")
-                .setHeader(
-                    Header.Builder()
-                        .setTitle("Inviter un passager")
-                        .setStartHeaderAction(Action.BACK)
-                        .build()
-                )
-                .build()
+        val url = state.shareUrl ?: return message("Aucune session configurée sur le téléphone.")
 
         val bitmap = QrCodeGenerator.generate(url, QR_SIZE_PX, QrCodeGenerator.loadLogo(carContext))
-            ?: return MessageTemplate.Builder(url)
-                .setHeader(
-                    Header.Builder()
-                        .setTitle("Inviter un passager")
-                        .setStartHeaderAction(Action.BACK)
-                        .build()
-                )
-                .build()
+            ?: return message(url)
 
-        val pane = Pane.Builder()
-            .addRow(
-                Row.Builder()
-                    .setTitle("Scanne pour rejoindre 🐙")
-                    .addText(url)
-                    .build()
+        val item = GridItem.Builder()
+            .setTitle("Scanne pour rejoindre 🐙")
+            .setText(url)
+            .setImage(
+                CarIcon.Builder(IconCompat.createWithBitmap(bitmap)).build(),
+                GridItem.IMAGE_TYPE_LARGE,
             )
-            .setImage(CarIcon.Builder(IconCompat.createWithBitmap(bitmap)).build())
             .build()
 
-        return PaneTemplate.Builder(pane)
-            .setHeader(
-                Header.Builder()
-                    .setTitle("Inviter un passager")
-                    .setStartHeaderAction(Action.BACK)
-                    .build()
-            )
+        return GridTemplate.Builder()
+            .setHeader(header())
+            .setItemSize(GridTemplate.ITEM_SIZE_LARGE)
+            .setSingleList(ItemList.Builder().addItem(item).build())
             .build()
     }
+
+    private fun header() = Header.Builder()
+        .setTitle("Inviter un passager")
+        .setStartHeaderAction(Action.BACK)
+        .build()
+
+    /** Repli lisible : au pire, le passager saisit l'adresse à la main. */
+    private fun message(text: String): Template =
+        MessageTemplate.Builder(text).setHeader(header()).build()
 
     companion object {
         /**
          * Android Auto transporte les images par binder, plafonné à 1 Mo pour
          * l'ensemble de la transaction : au-delà, l'écran plante au lieu de
-         * s'afficher. 480 px laisse une marge confortable.
+         * s'afficher. 480 px en ARGB_8888 pèse ~920 Ko, on reste en dessous.
          */
         private const val QR_SIZE_PX = 480
     }

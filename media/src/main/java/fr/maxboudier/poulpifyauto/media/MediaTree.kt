@@ -28,6 +28,19 @@ object MediaId {
     const val PREFIX_QUEUE_ADD = "queue:"
     const val PREFIX_PLAY_NOW = "play:"
     const val PREFIX_INFO = "info:"
+    /**
+     * Actions exposées comme éléments de navigation.
+     *
+     * Les boutons personnalisés du MediaSession dépendent du bon vouloir du
+     * host Android Auto, qui peut les reléguer dans un menu invisible. Une
+     * entrée dans la liste, elle, s'affiche toujours.
+     */
+    const val PREFIX_ACTION = "action:"
+    const val ACTION_VOTE_SKIP = "vote_skip"
+    const val ACTION_TOGGLE_LOCK = "toggle_lock"
+
+    fun action(name: String) = "$PREFIX_ACTION$name"
+    fun isAction(id: String) = id.startsWith(PREFIX_ACTION)
 
     fun playlist(id: String) = "$PREFIX_PLAYLIST$id"
     fun queueAdd(uri: String) = "$PREFIX_QUEUE_ADD$uri"

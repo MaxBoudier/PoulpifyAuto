@@ -57,6 +57,20 @@ class PoulpifyMediaLibraryService : MediaLibraryService() {
             coordinator.state.collect { player.onUpstreamStateChanged() }
         }
 
+        // Le libelle du bouton de vote porte le decompte : sans cette mise a
+        // jour, il resterait fige sur la valeur affichee a la connexion.
+        scope.launch {
+            coordinator.state
+                .map { it.votes to it.queueLocked }
+                .distinctUntilChanged()
+                .collect {
+                    librarySession?.setMediaButtonPreferences(customLayout())
+                    // Le decompte figure dans le libelle de l'entree de
+                    // navigation : la racine doit etre reconstruite.
+                    librarySession?.notifyChildrenChanged(MediaId.ROOT, rootNodes().size, null)
+                }
+        }
+
         // Toute nouveaute cote file ou verrou doit rafraichir l'arborescence
         // parcourue, sinon la voiture affiche une file perimee.
         scope.launch {
@@ -100,9 +114,17 @@ class PoulpifyMediaLibraryService : MediaLibraryService() {
                 .add(SessionCommand(CMD_VOTE_SKIP, Bundle.EMPTY))
                 .build()
 
+            android.util.Log.i(
+                "PoulpifyMedia",
+                "onConnect pkg=${controller.packageName} v=${controller.controllerVersion} " +
+                    "boutons=${customLayout().size} cmds=${sessionCommands.commands.size}",
+            )
             return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
                 .setAvailableSessionCommands(sessionCommands)
-                .setCustomLayout(customLayout())
+                // `setMediaButtonPreferences` et non `setCustomLayout` : c'est
+                // ce modele que media3 1.11 convertit en actions personnalisees
+                // de la PlaybackStateCompat, la seule que lit Android Auto.
+                .setMediaButtonPreferences(customLayout())
                 .build()
         }
 
@@ -115,7 +137,7 @@ class PoulpifyMediaLibraryService : MediaLibraryService() {
             when (customCommand.customAction) {
                 CMD_TOGGLE_LOCK -> {
                     coordinator.toggleQueueLock()
-                    session.setCustomLayout(customLayout())
+                    session.setMediaButtonPreferences(customLayout())
                     SessionResult(SessionResult.RESULT_SUCCESS)
                 }
                 CMD_HOST_SKIP -> {
@@ -124,7 +146,7 @@ class PoulpifyMediaLibraryService : MediaLibraryService() {
                 }
                 CMD_VOTE_SKIP -> {
                     coordinator.voteSkip()
-                    session.setCustomLayout(customLayout())
+                    session.setMediaButtonPreferences(customLayout())
                     SessionResult(SessionResult.RESULT_SUCCESS)
                 }
                 else -> SessionResult(SessionResult.RESULT_ERROR_NOT_SUPPORTED)
@@ -247,6 +269,10 @@ class PoulpifyMediaLibraryService : MediaLibraryService() {
 
     private suspend fun handleItemActivation(mediaId: String) {
         when {
+            MediaId.isAction(mediaId) -> when (MediaId.payload(mediaId)) {
+                MediaId.ACTION_VOTE_SKIP -> coordinator.voteSkip()
+                MediaId.ACTION_TOGGLE_LOCK -> coordinator.toggleQueueLock()
+            }
             MediaId.isPlayNow(mediaId) -> coordinator.playNow(MediaId.payload(mediaId))
             MediaId.isQueueAdd(mediaId) -> {
                 val uri = MediaId.payload(mediaId)
@@ -255,6 +281,21 @@ class PoulpifyMediaLibraryService : MediaLibraryService() {
             }
         }
     }
+
+    /** Élément de liste qui déclenche une action au lieu de jouer un titre. */
+    private fun actionItem(action: String, title: String, subtitle: String?): MediaItem =
+        MediaItem.Builder()
+            .setMediaId(MediaId.action(action))
+            .setMediaMetadata(
+                androidx.media3.common.MediaMetadata.Builder()
+                    .setTitle(title)
+                    .setSubtitle(subtitle)
+                    .setIsBrowsable(false)
+                    // Doit etre "playable" pour que le host le rende cliquable.
+                    .setIsPlayable(true)
+                    .build()
+            )
+            .build()
 
     private fun currentItemsWithPosition(): MediaSession.MediaItemsWithStartPosition {
         val items = buildList {
@@ -333,6 +374,17 @@ class PoulpifyMediaLibraryService : MediaLibraryService() {
     private fun rootNodes(): List<MediaItem> {
         val ui = coordinator.state.value
         return listOf(
+            actionItem(
+                MediaId.ACTION_VOTE_SKIP,
+                "⏭️ Voter pour passer (${ui.votes.current}/${ui.votes.required})",
+                ui.nowPlaying?.track?.name?.let { "Titre en cours : $it" },
+            ),
+            actionItem(
+                MediaId.ACTION_TOGGLE_LOCK,
+                if (ui.queueLocked) "🔓 Déverrouiller la file" else "🔒 Verrouiller la file",
+                if (ui.queueLocked) "Les passagers ne peuvent plus ajouter"
+                else "Les passagers peuvent ajouter des sons",
+            ),
             browsableNode(
                 MediaId.NODE_QUEUE,
                 "À suivre",
@@ -382,10 +434,11 @@ class PoulpifyMediaLibraryService : MediaLibraryService() {
     /**
      * Boutons affichés dans l'écran de lecture d'Android Auto.
      *
-     * `setSlots` est indispensable : depuis media3 1.11, un bouton sans
-     * emplacement déclaré atterrit dans `SLOT_OVERFLOW`, c'est-à-dire dans un
-     * menu qu'Android Auto n'affiche pas forcément — le bouton de vote était
-     * donc invisible.
+     * `setCustomIconResId` avec une vraie ressource est **indispensable** :
+     * Android Auto lit la `PlaybackStateCompat` héritée, dont les actions
+     * personnalisées exigent un identifiant de drawable. Avec une simple
+     * constante d'icône sémantique, media3 n'émettait aucune action et les
+     * boutons restaient invisibles (`custom actions=[]` dans dumpsys).
      *
      * Le bouton « suivant » du transport reste un saut immédiat d'hôte ; voter
      * est une action distincte, avec son décompte lisible sur le libellé.
@@ -399,22 +452,25 @@ class PoulpifyMediaLibraryService : MediaLibraryService() {
         return ImmutableList.of(
             CommandButton.Builder(CommandButton.ICON_THUMB_UP_UNFILLED)
                 .setDisplayName("Voter pour passer ($votes/$required)")
+                .setCustomIconResId(R.drawable.ic_vote_skip)
                 .setSessionCommand(SessionCommand(CMD_VOTE_SKIP, Bundle.EMPTY))
-                .setSlots(CommandButton.SLOT_FORWARD_SECONDARY, CommandButton.SLOT_OVERFLOW)
+                .setSlots(CommandButton.SLOT_OVERFLOW)
                 .setEnabled(true)
                 .build(),
             CommandButton.Builder(
                 if (locked) CommandButton.ICON_FLAG_FILLED else CommandButton.ICON_FLAG_UNFILLED
             )
                 .setDisplayName(if (locked) "Déverrouiller la file" else "Verrouiller la file")
+                .setCustomIconResId(
+                    if (locked) R.drawable.ic_queue_locked else R.drawable.ic_queue_open
+                )
                 .setSessionCommand(SessionCommand(CMD_TOGGLE_LOCK, Bundle.EMPTY))
-                .setSlots(CommandButton.SLOT_BACK_SECONDARY, CommandButton.SLOT_OVERFLOW)
+                .setSlots(CommandButton.SLOT_OVERFLOW)
                 .setEnabled(true)
                 .build(),
-            // Le saut immediat reste accessible, mais en retrait : le bouton
-            // « suivant » du transport fait deja exactement cela.
             CommandButton.Builder(CommandButton.ICON_SKIP_FORWARD)
                 .setDisplayName("Passer maintenant (hôte)")
+                .setCustomIconResId(R.drawable.ic_host_skip)
                 .setSessionCommand(SessionCommand(CMD_HOST_SKIP, Bundle.EMPTY))
                 .setSlots(CommandButton.SLOT_OVERFLOW)
                 .setEnabled(true)
