@@ -51,6 +51,14 @@ class PoulpifyMediaLibraryService : MediaLibraryService() {
             .setId("poulpify_media_session")
             .build()
 
+        // Les notifications vivent ici et non dans la session Car App
+        // Library : celle-ci n'existe que si le conducteur ouvre le tableau de
+        // bord, alors que ce service tourne des qu'Android Auto est connecte.
+        val notifier = CarNotifier(this)
+        scope.launch {
+            coordinator.events.collect { notifier.notify(it) }
+        }
+
         // Le lecteur n'a pas de source d'evenements propre : c'est l'etat
         // partage qui le pilote.
         scope.launch {
@@ -110,7 +118,7 @@ class PoulpifyMediaLibraryService : MediaLibraryService() {
             val sessionCommands = MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS
                 .buildUpon()
                 .add(SessionCommand(CMD_TOGGLE_LOCK, Bundle.EMPTY))
-                .add(SessionCommand(CMD_HOST_SKIP, Bundle.EMPTY))
+                .add(SessionCommand(CMD_SHOW_QR, Bundle.EMPTY))
                 .add(SessionCommand(CMD_VOTE_SKIP, Bundle.EMPTY))
                 .build()
 
@@ -140,8 +148,8 @@ class PoulpifyMediaLibraryService : MediaLibraryService() {
                     session.setMediaButtonPreferences(customLayout())
                     SessionResult(SessionResult.RESULT_SUCCESS)
                 }
-                CMD_HOST_SKIP -> {
-                    coordinator.hostSkip()
+                CMD_SHOW_QR -> {
+                    showQrOnArtwork()
                     SessionResult(SessionResult.RESULT_SUCCESS)
                 }
                 CMD_VOTE_SKIP -> {
@@ -280,6 +288,21 @@ class PoulpifyMediaLibraryService : MediaLibraryService() {
                 if (track != null) coordinator.addToQueue(track)
             }
         }
+    }
+
+    /**
+     * Bascule la pochette sur le QR d'invitation quelques secondes.
+     *
+     * La pochette est le seul grand emplacement de l'écran de lecture ; les
+     * templates ne permettent pas d'afficher une image de cette taille
+     * ailleurs. Le retour automatique évite de laisser un écran qui ne
+     * correspond plus à ce qui joue.
+     */
+    private fun showQrOnArtwork() {
+        val url = coordinator.state.value.shareUrl ?: return
+        val qr = QrCodeGenerator.generatePng(url, QR_SIZE_PX, QrCodeGenerator.loadLogo(this))
+            ?: return
+        player.flashQrArtwork(qr, QR_FLASH_MS)
     }
 
     /** Élément de liste qui déclenche une action au lieu de jouer un titre. */
@@ -468,10 +491,12 @@ class PoulpifyMediaLibraryService : MediaLibraryService() {
                 .setSlots(CommandButton.SLOT_OVERFLOW)
                 .setEnabled(true)
                 .build(),
-            CommandButton.Builder(CommandButton.ICON_SKIP_FORWARD)
-                .setDisplayName("Passer maintenant (hôte)")
-                .setCustomIconResId(R.drawable.ic_host_skip)
-                .setSessionCommand(SessionCommand(CMD_HOST_SKIP, Bundle.EMPTY))
+            // Le bouton « suivant » du transport fait deja le saut immediat :
+            // cette place est mieux employee par le QR d'invitation.
+            CommandButton.Builder(CommandButton.ICON_UNDEFINED)
+                .setDisplayName("Afficher le QR d'invitation")
+                .setCustomIconResId(R.drawable.ic_show_qr)
+                .setSessionCommand(SessionCommand(CMD_SHOW_QR, Bundle.EMPTY))
                 .setSlots(CommandButton.SLOT_OVERFLOW)
                 .setEnabled(true)
                 .build(),
@@ -480,7 +505,8 @@ class PoulpifyMediaLibraryService : MediaLibraryService() {
 
     companion object {
         private const val CMD_TOGGLE_LOCK = "fr.maxboudier.poulpifyauto.TOGGLE_LOCK"
-        private const val CMD_HOST_SKIP = "fr.maxboudier.poulpifyauto.HOST_SKIP"
+        private const val CMD_SHOW_QR = "fr.maxboudier.poulpifyauto.SHOW_QR"
+        private const val QR_FLASH_MS = 8_000L
         private const val CMD_VOTE_SKIP = "fr.maxboudier.poulpifyauto.VOTE_SKIP"
         private const val QR_SIZE_PX = 512
     }

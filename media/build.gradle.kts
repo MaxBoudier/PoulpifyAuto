@@ -27,6 +27,9 @@ dependencies {
     api(libs.media3.session)
     api(libs.media3.common)
     implementation(libs.androidx.core.ktx)
+    // Uniquement pour CarNotificationManager/CarAppExtender : Android Auto
+    // n'affiche pas les notifications ordinaires d'une application.
+    implementation(libs.androidx.car.app)
     implementation(libs.kotlinx.coroutines.android)
     // media3 attend des ListenableFuture Guava : c'est cette extension qui
     // ponte les coroutines vers ce type (celle de kotlinx.coroutines.future

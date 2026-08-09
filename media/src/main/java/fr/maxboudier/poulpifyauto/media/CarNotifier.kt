@@ -1,4 +1,4 @@
-package fr.maxboudier.poulpifyauto.car
+package fr.maxboudier.poulpifyauto.media
 
 import android.content.Context
 import androidx.car.app.notification.CarAppExtender
@@ -40,19 +40,25 @@ class CarNotifier(private val context: Context) {
                     "Un passager de plus à bord"
 
             is SessionEvent.SkipVoteCast ->
-                "Vote pour passer ⏭️" to buildString {
-                    append("${event.votes.current}/${event.votes.required} vote(s)")
+                "⏭️ Vote pour passer : ${event.votes.current}/${event.votes.required}" to buildString {
+                    append(
+                        if (event.remaining <= 1) "Encore 1 vote et le son passe"
+                        else "Encore ${event.remaining} votes et le son passe"
+                    )
                     event.trackName?.let { append(" • $it") }
                 }
 
+            is SessionEvent.SkipVotePassed ->
+                "⏭️ Vote validé, on passe !" to
+                    (event.trackName?.let { "« $it » a été zappé" } ?: "Titre suivant")
+
             is SessionEvent.TrackQueued -> {
-                val who = event.track.addedBy ?: "Un passager"
-                val emoji = event.track.addedByEmoji.orEmpty()
-                "$emoji$who a ajouté un son" to
-                    // Un titre surprise le reste jusqu'a ce qu'il passe : le
-                    // devoiler dans une notification viderait le jeu.
-                    if (event.track.isInked) "🐙 Titre surprise"
-                    else "${event.track.name} — ${event.track.artistLabel}"
+                val who = event.by ?: "Un passager"
+                val emoji = event.emoji.orEmpty()
+                // Volontairement muet sur le titre ajoute : la decouverte fait
+                // partie du jeu, la notification annonce l'evenement, pas le son.
+                "$emoji$who a ajouté un son 🎵" to
+                    "${event.queueSize} titre(s) dans la file"
             }
 
             // Le conducteur est le seul a pouvoir verrouiller : il vient de le

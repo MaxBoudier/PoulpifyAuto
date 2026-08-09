@@ -14,6 +14,8 @@ import fr.maxboudier.poulpifyauto.core.model.RepeatMode
 import fr.maxboudier.poulpifyauto.core.session.SessionCoordinator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -61,6 +63,28 @@ class SpotifyProxyPlayer(
         invalidateState()
     }
 
+    @Volatile
+    private var qrArtwork: ByteArray? = null
+    private var qrRevertJob: Job? = null
+
+    /**
+     * Affiche brièvement le QR d'invitation à la place de la pochette.
+     *
+     * C'est le seul emplacement vraiment grand de l'écran de lecture : les
+     * templates ne permettent pas d'agrandir une image ailleurs. On le rend
+     * donc temporaire, pour ne pas mentir durablement sur ce qui joue.
+     */
+    fun flashQrArtwork(png: ByteArray, durationMs: Long) {
+        qrArtwork = png
+        invalidateState()
+        qrRevertJob?.cancel()
+        qrRevertJob = scope.launch {
+            delay(durationMs)
+            qrArtwork = null
+            invalidateState()
+        }
+    }
+
     override fun getState(): State {
         val ui: PoulpifyUiState = coordinator.state.value
         val playback = ui.nowPlaying
@@ -88,7 +112,7 @@ class SpotifyProxyPlayer(
             // Ne publier que le titre courant, comme avant, la laissait vide :
             // on expose donc le titre en cours suivi de toute la file Poulpify.
             val playlist = buildList {
-                add(mediaItemData(track, seekable = playback.canSeek, index = 0))
+                add(mediaItemData(track, seekable = playback.canSeek, index = 0, artworkOverride = qrArtwork))
                 ui.queue.forEachIndexed { position, queued ->
                     add(mediaItemData(queued, seekable = false, index = position + 1))
                 }
@@ -112,8 +136,17 @@ class SpotifyProxyPlayer(
         track: fr.maxboudier.poulpifyauto.core.model.Track,
         seekable: Boolean,
         index: Int,
+        artworkOverride: ByteArray? = null,
     ): MediaItemData {
-        val metadata = track.toMediaMetadata()
+        val metadata = track.toMediaMetadata().let { base ->
+            if (artworkOverride == null) base
+            // L'URI doit etre effacee : sinon elle reste prioritaire sur les
+            // octets et la pochette d'album continuerait de s'afficher.
+            else base.buildUpon()
+                .setArtworkUri(null)
+                .setArtworkData(artworkOverride, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
+                .build()
+        }
         return MediaItemData.Builder("$index:${track.uri}")
             .setMediaItem(
                 MediaItem.Builder()

@@ -335,10 +335,21 @@ class SessionCoordinator(
             .forEach { _events.emit(SessionEvent.PassengerJoined(it.toDomain())) }
 
         val votes = current.votes.skipVotes
-        if (votes > previous.votes.skipVotes) {
-            _events.emit(
+        val required = current.votes.requiredVotes
+        val trackChanged = current.player?.item?.uri != previous.player?.item?.uri
+
+        when {
+            // Le serveur passe le titre puis remet les votes a zero dans le
+            // meme cycle : le seuil atteint n'apparait jamais dans un
+            // instantane. On le deduit de la remise a zero conjointe au
+            // changement de titre.
+            previous.votes.skipVotes > 0 && votes == 0 && trackChanged ->
+                _events.emit(SessionEvent.SkipVotePassed(previous.player?.item?.name))
+
+            votes > previous.votes.skipVotes -> _events.emit(
                 SessionEvent.SkipVoteCast(
-                    votes = Votes(votes, current.votes.requiredVotes),
+                    votes = Votes(votes, required),
+                    remaining = (required - votes).coerceAtLeast(0),
                     trackName = current.player?.item?.name,
                 )
             )
@@ -349,7 +360,13 @@ class SessionCoordinator(
             // On retire au fur et a mesure : un meme titre peut figurer deux
             // fois dans la file, seul l'exemplaire en trop est une nouveaute.
             if (!knownUris.remove(track.uri) && track.addedViaPoulpify && !track.addedByHost) {
-                _events.emit(SessionEvent.TrackQueued(track.toDomain()))
+                _events.emit(
+                    SessionEvent.TrackQueued(
+                        by = track.addedBy,
+                        emoji = track.addedByEmoji,
+                        queueSize = current.queue.size,
+                    )
+                )
             }
         }
 
