@@ -1,5 +1,6 @@
 package fr.maxboudier.poulpifyauto.core.spotify
 
+import android.app.Activity
 import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
@@ -59,7 +60,38 @@ class SpotifyRemoteController(
 
     override val isConnected: Boolean get() = remote?.isConnected == true
 
+    /**
+     * Contexte d'activité, quand l'écran téléphone est au premier plan.
+     *
+     * `showAuthView(true)` doit afficher une boîte de dialogue : avec le seul
+     * contexte applicatif, Spotify ne peut rien afficher et répond
+     * `UserNotAuthorizedException`. La toute première autorisation doit donc
+     * passer par l'activité ; une fois accordée, Android Auto se connecte
+     * ensuite sans interface.
+     */
+    @Volatile
+    private var activityContext: Context? = null
+
+    fun attachActivity(activity: Activity?) {
+        activityContext = activity
+        if (activity != null && !isConnected) connect()
+    }
+
+    /**
+     * `SpotifyAppRemote.connect` construit un `Handler` et lance un `AsyncTask`
+     * sans se soucier du thread appelant : appelé depuis un worker, il jette
+     * « Can't create handler inside thread ... that has not called
+     * Looper.prepare() » et tue le processus.
+     *
+     * Le coordinateur tourne sur `Dispatchers.Default` ; c'est donc ici, au
+     * contact du SDK, qu'on rebascule sur le thread principal — plutôt que
+     * d'imposer cette contrainte à tous les appelants.
+     */
     override fun connect() {
+        scope.launch { connectOnMainThread() }
+    }
+
+    private fun connectOnMainThread() {
         wantConnection = true
         if (isConnected) return
         if (!SpotifyAppRemote.isSpotifyInstalled(context)) {
@@ -79,7 +111,10 @@ class SpotifyRemoteController(
             .showAuthView(true)
             .build()
 
-        SpotifyAppRemote.connect(context, params, object : Connector.ConnectionListener {
+        // L'activite si elle est au premier plan, sinon le contexte applicatif :
+        // seule la premiere autorisation a besoin d'afficher une interface.
+        val connectContext = activityContext ?: context
+        SpotifyAppRemote.connect(connectContext, params, object : Connector.ConnectionListener {
             override fun onConnected(appRemote: SpotifyAppRemote) {
                 remote = appRemote
                 reconnectDelayMs = MIN_RECONNECT_MS
@@ -118,16 +153,19 @@ class SpotifyRemoteController(
         })
     }
 
+    /** Même contrainte de thread que [connect] : le SDK défait ses Handler ici. */
     override fun disconnect() {
         wantConnection = false
-        reconnectJob?.cancel()
-        reconnectJob = null
-        playerSubscription?.cancel()
-        playerSubscription = null
-        remote?.let { SpotifyAppRemote.disconnect(it) }
-        remote = null
-        _playback.value = null
-        _state.value = RemoteState.DISCONNECTED
+        scope.launch {
+            reconnectJob?.cancel()
+            reconnectJob = null
+            playerSubscription?.cancel()
+            playerSubscription = null
+            remote?.let { SpotifyAppRemote.disconnect(it) }
+            remote = null
+            _playback.value = null
+            _state.value = RemoteState.DISCONNECTED
+        }
     }
 
     private fun subscribeToPlayerState(appRemote: SpotifyAppRemote) {
@@ -152,7 +190,8 @@ class SpotifyRemoteController(
         reconnectJob = scope.launch {
             delay(reconnectDelayMs)
             reconnectDelayMs = (reconnectDelayMs * 2).coerceAtMost(MAX_RECONNECT_MS)
-            if (wantConnection && !isConnected) connect()
+            // Deja sur le thread principal : appel direct, pas de relance.
+            if (wantConnection && !isConnected) connectOnMainThread()
         }
     }
 

@@ -37,6 +37,7 @@ import fr.maxboudier.poulpifyauto.ui.DiagnosticsScreen
 import fr.maxboudier.poulpifyauto.ui.LibraryScreen
 import fr.maxboudier.poulpifyauto.ui.PoulpifyViewModel
 import fr.maxboudier.poulpifyauto.ui.SettingsScreen
+import fr.maxboudier.poulpifyauto.core.session.PoulpifyGraph
 import fr.maxboudier.poulpifyauto.ui.theme.PoulpifyTheme
 
 private enum class Tab(val label: String) {
@@ -69,6 +70,21 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    /**
+     * La toute premiere autorisation Spotify exige une activite a l'ecran pour
+     * afficher sa boite de dialogue. On la prete au controleur tant qu'on est
+     * visible, et on la reprend ensuite pour ne pas fuiter l'activite.
+     */
+    override fun onStart() {
+        super.onStart()
+        PoulpifyGraph.remote.attachActivity(this)
+    }
+
+    override fun onStop() {
+        PoulpifyGraph.remote.attachActivity(null)
+        super.onStop()
     }
 }
 
