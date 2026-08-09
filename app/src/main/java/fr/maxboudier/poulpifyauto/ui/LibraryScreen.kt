@@ -9,7 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Search
@@ -110,7 +110,9 @@ fun LibraryScreen(
                 )
             }
         } else {
-            items(tracks, key = { it.uri }) { track ->
+            // Meme garde que la file : l'API Spotify peut renvoyer le meme
+            // titre plusieurs fois (recherche, chevauchement top/likes).
+            itemsIndexed(tracks, key = { index, track -> "$index:${track.uri}" }) { _, track ->
                 TrackRow(track, onAdd = { onAddToQueue(track) })
             }
         }
