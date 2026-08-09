@@ -187,10 +187,5 @@ class SpotifyProxyPlayer(
  * file laisserait fuiter sa pochette par le bouton « Queue », alors même
  * qu'elle est masquée dans la navigation.
  */
-private fun fr.maxboudier.poulpifyauto.core.model.Track.toMediaMetadata(): MediaMetadata {
-    val subtitle = buildString {
-        append(artistLabel)
-        addedBy?.let { append(" • ajouté par $it") }
-    }
-    return trackMetadata(subtitle)
-}
+private fun fr.maxboudier.poulpifyauto.core.model.Track.toMediaMetadata(): MediaMetadata =
+    trackMetadata(listOfNotNull(artistLabel, credit()).joinToString(" • "))

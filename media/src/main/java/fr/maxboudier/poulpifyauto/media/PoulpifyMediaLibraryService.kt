@@ -360,7 +360,7 @@ class PoulpifyMediaLibraryService : MediaLibraryService() {
         val url = coordinator.state.value.shareUrl
             ?: return listOf(infoItem("no_url", "Aucun serveur configuré"))
 
-        val qr = QrCodeGenerator.generatePng(url, QR_SIZE_PX)
+        val qr = QrCodeGenerator.generatePng(url, QR_SIZE_PX, QrCodeGenerator.loadLogo(this))
             ?: return listOf(infoItem("qr_failed", url, "Saisis cette adresse dans un navigateur"))
 
         return listOf(
@@ -379,31 +379,45 @@ class PoulpifyMediaLibraryService : MediaLibraryService() {
         )
     }
 
+    /**
+     * Boutons affichés dans l'écran de lecture d'Android Auto.
+     *
+     * `setSlots` est indispensable : depuis media3 1.11, un bouton sans
+     * emplacement déclaré atterrit dans `SLOT_OVERFLOW`, c'est-à-dire dans un
+     * menu qu'Android Auto n'affiche pas forcément — le bouton de vote était
+     * donc invisible.
+     *
+     * Le bouton « suivant » du transport reste un saut immédiat d'hôte ; voter
+     * est une action distincte, avec son décompte lisible sur le libellé.
+     */
     private fun customLayout(): ImmutableList<CommandButton> {
         val ui = coordinator.state.value
         val locked = ui.queueLocked
         val votes = ui.votes.current
         val required = ui.votes.required
+
         return ImmutableList.of(
-            CommandButton.Builder()
-                .setDisplayName(if (locked) "Déverrouiller la file" else "Verrouiller la file")
-                .setIconResId(
-                    if (locked) android.R.drawable.ic_lock_idle_lock
-                    else android.R.drawable.ic_lock_lock
-                )
-                .setSessionCommand(SessionCommand(CMD_TOGGLE_LOCK, Bundle.EMPTY))
-                .build(),
-            CommandButton.Builder()
-                .setDisplayName("Passer (hôte)")
-                .setIconResId(android.R.drawable.ic_media_next)
-                .setSessionCommand(SessionCommand(CMD_HOST_SKIP, Bundle.EMPTY))
-                .build(),
-            // L'hote peut aussi voter comme un passager, plutot que d'imposer
-            // le saut : le decompte rend le vote lisible sans ouvrir un ecran.
-            CommandButton.Builder()
+            CommandButton.Builder(CommandButton.ICON_THUMB_UP_UNFILLED)
                 .setDisplayName("Voter pour passer ($votes/$required)")
-                .setIconResId(android.R.drawable.ic_menu_sort_by_size)
                 .setSessionCommand(SessionCommand(CMD_VOTE_SKIP, Bundle.EMPTY))
+                .setSlots(CommandButton.SLOT_FORWARD_SECONDARY, CommandButton.SLOT_OVERFLOW)
+                .setEnabled(true)
+                .build(),
+            CommandButton.Builder(
+                if (locked) CommandButton.ICON_FLAG_FILLED else CommandButton.ICON_FLAG_UNFILLED
+            )
+                .setDisplayName(if (locked) "Déverrouiller la file" else "Verrouiller la file")
+                .setSessionCommand(SessionCommand(CMD_TOGGLE_LOCK, Bundle.EMPTY))
+                .setSlots(CommandButton.SLOT_BACK_SECONDARY, CommandButton.SLOT_OVERFLOW)
+                .setEnabled(true)
+                .build(),
+            // Le saut immediat reste accessible, mais en retrait : le bouton
+            // « suivant » du transport fait deja exactement cela.
+            CommandButton.Builder(CommandButton.ICON_SKIP_FORWARD)
+                .setDisplayName("Passer maintenant (hôte)")
+                .setSessionCommand(SessionCommand(CMD_HOST_SKIP, Bundle.EMPTY))
+                .setSlots(CommandButton.SLOT_OVERFLOW)
+                .setEnabled(true)
                 .build(),
         )
     }

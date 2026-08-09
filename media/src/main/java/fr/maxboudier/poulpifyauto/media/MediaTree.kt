@@ -72,30 +72,42 @@ internal fun infoItem(id: String, title: String, subtitle: String? = null): Medi
         .build()
 
 internal fun Track.toMediaItem(mediaId: String, subtitleOverride: String? = null): MediaItem {
-    val subtitle = subtitleOverride ?: buildString {
-        append(artistLabel)
-        if (addedViaPoulpify && addedBy != null) {
-            append(" • ")
-            addedByEmoji?.let { append("$it ") }
-            append(addedBy)
-        }
-    }
+    val subtitle = subtitleOverride ?: listOfNotNull(artistLabel, credit()).joinToString(" • ")
     return MediaItem.Builder()
         .setMediaId(mediaId)
         .setMediaMetadata(trackMetadata(subtitle))
         .build()
 }
 
+/** « ajouté par 🎸 Alice », ou null si le titre ne vient pas de Poulpify. */
+internal fun Track.credit(): String? =
+    if (addedViaPoulpify && addedBy != null) {
+        "ajouté par ${addedByEmoji?.let { "$it " }.orEmpty()}$addedBy"
+    } else {
+        null
+    }
+
 /**
  * Un titre « encré » ne doit rien laisser filtrer : ni son nom, ni son artiste,
  * ni sa pochette. Afficher la vraie image permettait de reconnaître le morceau
  * avant qu'il ne passe.
+ *
+ * `artist` et `subtitle` sont distincts et tous deux porteurs du crédit :
+ * l'écran de lecture d'Android Auto affiche `artist`, la navigation affiche
+ * `subtitle`. N'alimenter que l'un des deux fait disparaître « ajouté par » de
+ * l'autre surface.
  */
 internal fun Track.trackMetadata(subtitle: String): MediaMetadata =
     MediaMetadata.Builder()
         .setTitle(if (isInked) "🐙 Titre surprise" else name)
         .setSubtitle(if (isInked) "Ajouté par ${addedBy ?: "quelqu'un"}" else subtitle)
-        .setArtist(if (isInked) "Surprise" else artistLabel)
+        .setArtist(
+            when {
+                isInked -> "🐙 Surprise de ${addedBy ?: "quelqu'un"}"
+                credit() != null -> "$artistLabel • ${credit()}"
+                else -> artistLabel
+            }
+        )
         .setAlbumTitle(if (isInked) null else albumName)
         .apply {
             if (isInked) {

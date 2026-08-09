@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledIconButton
@@ -35,6 +36,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -60,12 +62,26 @@ fun DashboardScreen(
     onToggleLock: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var showInvite by remember { mutableStateOf(false) }
+    if (showInvite) {
+        InviteDialog(shareUrl = state.shareUrl, onDismiss = { showInvite = false })
+    }
+
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         item { NowPlayingCard(state, positionProvider, onPlayPause, onNext, onPrevious) }
+
+        item {
+            // Le QR ne peut pas etre scanne depuis l'ecran de la voiture :
+            // c'est ici qu'un passager le lit.
+            Button(
+                onClick = { showInvite = true },
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("Inviter un passager (QR code)") }
+        }
 
         item {
             Row(

@@ -33,7 +33,7 @@ class InviteScreen(carContext: CarContext) : PoulpifyScreen(carContext) {
                 )
                 .build()
 
-        val bitmap = QrCodeGenerator.generate(url, QR_SIZE_PX)
+        val bitmap = QrCodeGenerator.generate(url, QR_SIZE_PX, QrCodeGenerator.loadLogo(carContext))
             ?: return MessageTemplate.Builder(url)
                 .setHeader(
                     Header.Builder()
