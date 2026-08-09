@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    HTTPS strict. L'ancienne version activait usesCleartextTraffic sans en
+    avoir besoin : le serveur Poulpify est derriere TLS.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+</network-security-config>

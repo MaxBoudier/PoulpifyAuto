@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <!--
+        Le mot de passe hote est chiffre par une cle du Keystore, qui elle ne
+        suit pas la sauvegarde : le restaurer sur un autre appareil donnerait
+        un chiffre illisible. On l'exclut, l'app le redemandera.
+    -->
+    <exclude domain="sharedpref" path="poulpify_settings.preferences_pb" />
+</full-backup-content>

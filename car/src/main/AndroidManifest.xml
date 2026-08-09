@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <meta-data
+            android:name="androidx.car.app.minCarApiLevel"
+            android:value="5" />
+
+        <service
+            android:name="fr.maxboudier.poulpifyauto.car.PoulpifyCarAppService"
+            android:exported="true"
+            android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="androidx.car.app.CarAppService" />
+                <!--
+                    Categorie IOT : Poulpify n'est pas une app de navigation ni
+                    un lecteur autonome, c'est un tableau de bord de session.
+                    Acceptable en sideload ; un depot sur le Play Store
+                    demanderait une categorie approuvee par Google.
+                -->
+                <category android:name="androidx.car.app.category.IOT" />
+            </intent-filter>
+        </service>
+    </application>
+
+</manifest>
