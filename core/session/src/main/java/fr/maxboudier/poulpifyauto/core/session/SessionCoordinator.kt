@@ -62,6 +62,11 @@ class SessionCoordinator(
     private val tokenHolder: HostTokenHolder,
     private val scope: CoroutineScope,
     private val debugLogging: Boolean,
+    /**
+     * Horloge monotone, injectable. `SystemClock` renvoie 0 sous JUnit : sans
+     * cette couture, l'interpolation de position serait invérifiable.
+     */
+    private val elapsedRealtimeMs: () -> Long = { SystemClock.elapsedRealtime() },
 ) {
     private val subscribers = AtomicInteger(0)
     private val loginMutex = Mutex()
@@ -89,6 +94,10 @@ class SessionCoordinator(
     private var positionAnchorAt: Long = 0
     @Volatile
     private var positionAdvancing: Boolean = false
+
+    /** Dernière position reçue de la source, pour ne ré-ancrer qu'aux vrais changements. */
+    @Volatile
+    private var lastAnchorSourceMs: Long = -1
 
     private val localState = combine(connection, error, library, config) { conn, err, lib, cfg ->
         LocalState(conn, err, lib, cfg)
@@ -533,9 +542,19 @@ class SessionCoordinator(
     // Position de lecture
     // ---------------------------------------------------------------------
 
+    /**
+     * Repose l'ancre **uniquement quand la source a réellement bougé**.
+     *
+     * [merge] tourne à chaque émission amont, y compris pour des changements
+     * sans rapport (un passager qui rejoint, la file qui change). Ré-ancrer à
+     * chaque passage rejouerait la position poussée par App Remote au dernier
+     * changement de lecture, et la barre de progression sauterait en arrière.
+     */
     private fun setPositionAnchor(positionMs: Long, advancing: Boolean) {
+        if (positionMs == lastAnchorSourceMs && advancing == positionAdvancing) return
+        lastAnchorSourceMs = positionMs
         positionAnchorMs = positionMs
-        positionAnchorAt = SystemClock.elapsedRealtime()
+        positionAnchorAt = elapsedRealtimeMs()
         positionAdvancing = advancing
     }
 
@@ -547,7 +566,7 @@ class SessionCoordinator(
     fun currentPositionMs(): Long {
         val base = positionAnchorMs
         if (!positionAdvancing) return base
-        val elapsed = SystemClock.elapsedRealtime() - positionAnchorAt
+        val elapsed = elapsedRealtimeMs() - positionAnchorAt
         val duration = state.value.nowPlaying?.durationMs ?: Long.MAX_VALUE
         return (base + elapsed).coerceAtMost(duration)
     }
