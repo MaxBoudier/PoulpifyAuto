@@ -11,6 +11,7 @@ import fr.maxboudier.poulpifyauto.core.model.Playlist
 import fr.maxboudier.poulpifyauto.core.model.PoulpifyUiState
 import fr.maxboudier.poulpifyauto.core.model.RemotePlayback
 import fr.maxboudier.poulpifyauto.core.model.RemoteState
+import fr.maxboudier.poulpifyauto.core.model.SessionEvent
 import fr.maxboudier.poulpifyauto.core.model.SpotifyRemote
 import fr.maxboudier.poulpifyauto.core.model.RepeatMode
 import fr.maxboudier.poulpifyauto.core.model.Track
@@ -32,9 +33,12 @@ import fr.maxboudier.poulpifyauto.core.network.toDomain
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -82,6 +86,14 @@ class SessionCoordinator(
     private val connection = MutableStateFlow(ConnectionState.DISCONNECTED)
     private val error = MutableStateFlow<UserFacingError?>(null)
     private val config = MutableStateFlow<AppConfig?>(null)
+
+    /**
+     * Événements ponctuels (vote, ajout, arrivée), par opposition à [state] qui
+     * décrit une situation. `extraBufferCapacity` évite de perdre une rafale
+     * d'événements quand plusieurs passagers agissent en même temps.
+     */
+    private val _events = MutableSharedFlow<SessionEvent>(extraBufferCapacity = 32)
+    val events: SharedFlow<SessionEvent> = _events.asSharedFlow()
 
     /**
      * Ancre de position : App Remote ne pousse la position qu'aux changements.
@@ -173,11 +185,11 @@ class SessionCoordinator(
         if (apiBaseUrl == serverUrl && api != null) return
         val client = NetworkModule.createOkHttpClient(tokenHolder, debugLogging)
         api = NetworkModule.createApi(serverUrl, client)
-        events = NetworkModule.createEventsClient(serverUrl, client)
+        eventsClient = NetworkModule.createEventsClient(serverUrl, client)
         apiBaseUrl = serverUrl
     }
 
-    private var events: fr.maxboudier.poulpifyauto.core.network.PoulpifyEventsClient? = null
+    private var eventsClient: fr.maxboudier.poulpifyauto.core.network.PoulpifyEventsClient? = null
 
     // ---------------------------------------------------------------------
     // Authentification hôte
@@ -263,7 +275,7 @@ class SessionCoordinator(
 
     private fun startEventStream(cfg: AppConfig) {
         sseJob?.cancel()
-        val stream = events ?: return
+        val stream = eventsClient ?: return
         sseJob = scope.launch {
             stream.connect().collect { event ->
                 when (event) {
@@ -284,6 +296,7 @@ class SessionCoordinator(
     }
 
     private suspend fun onSnapshot(snapshot: SseSnapshotDto) {
+        detectEvents(previous = serverSnapshot.value, current = snapshot)
         serverSnapshot.value = snapshot
 
         // Le serveur a perdu la session hote (redemarrage, expiration) :
@@ -303,6 +316,45 @@ class SessionCoordinator(
             snapshot.player?.let { player ->
                 setPositionAnchor(player.progressMs, player.isPlaying)
             }
+        }
+    }
+
+    /**
+     * Déduit les transitions à partir de deux instantanés successifs : le flux
+     * SSE décrit un état, pas des événements.
+     *
+     * Rien de ce que fait le conducteur lui-même n'est signalé — il vient de
+     * l'appuyer, une notification serait du bruit.
+     */
+    private suspend fun detectEvents(previous: SseSnapshotDto?, current: SseSnapshotDto) {
+        if (previous == null) return
+        val driverName = config.value?.driverName
+
+        current.recentJoins
+            .filter { it.name != driverName && previous.recentJoins.none { old -> old.name == it.name } }
+            .forEach { _events.emit(SessionEvent.PassengerJoined(it.toDomain())) }
+
+        val votes = current.votes.skipVotes
+        if (votes > previous.votes.skipVotes) {
+            _events.emit(
+                SessionEvent.SkipVoteCast(
+                    votes = Votes(votes, current.votes.requiredVotes),
+                    trackName = current.player?.item?.name,
+                )
+            )
+        }
+
+        val knownUris = previous.queue.map { it.uri }.toMutableList()
+        current.queue.forEach { track ->
+            // On retire au fur et a mesure : un meme titre peut figurer deux
+            // fois dans la file, seul l'exemplaire en trop est une nouveaute.
+            if (!knownUris.remove(track.uri) && track.addedViaPoulpify && !track.addedByHost) {
+                _events.emit(SessionEvent.TrackQueued(track.toDomain()))
+            }
+        }
+
+        if (current.status.queueLocked != previous.status.queueLocked) {
+            _events.emit(SessionEvent.QueueLockChanged(current.status.queueLocked))
         }
     }
 

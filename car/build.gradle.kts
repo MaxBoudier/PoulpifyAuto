@@ -27,9 +27,6 @@ dependencies {
     api(libs.androidx.car.app)
     implementation(libs.androidx.core.ktx)
     implementation(libs.kotlinx.coroutines.android)
-    // QR genere a la volee : l'ancienne app embarquait un PNG fige qui ne
-    // pouvait pas suivre un changement d'URL de serveur.
-    implementation(libs.zxing.core)
 
     testImplementation(libs.junit)
 }

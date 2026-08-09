@@ -123,6 +123,16 @@ class DashboardScreen(carContext: CarContext) : PoulpifyScreen(carContext) {
                 .build()
         )
         .addAction(
+            // L'hote vote comme un passager plutot que d'imposer le saut : le
+            // decompte s'affiche directement sur le bouton.
+            Action.Builder()
+                .setTitle("Voter ${ui.votes.current}/${ui.votes.required}")
+                .setOnClickListener {
+                    runAction("Vote enregistré") { coordinator.voteSkip() }
+                }
+                .build()
+        )
+        .addAction(
             Action.Builder()
                 .setTitle(if (ui.queueLocked) "Déverrouiller" else "Verrouiller")
                 .setOnClickListener {

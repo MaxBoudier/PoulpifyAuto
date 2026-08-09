@@ -22,6 +22,7 @@ object MediaId {
     const val NODE_TOP = "node_top"
     const val NODE_RECENT = "node_recent"
     const val NODE_PASSENGERS = "node_passengers"
+    const val NODE_INVITE = "node_invite"
 
     const val PREFIX_PLAYLIST = "playlist:"
     const val PREFIX_QUEUE_ADD = "queue:"
@@ -81,22 +82,32 @@ internal fun Track.toMediaItem(mediaId: String, subtitleOverride: String? = null
     }
     return MediaItem.Builder()
         .setMediaId(mediaId)
-        .setMediaMetadata(
-            MediaMetadata.Builder()
-                // Un titre "surprise" reste masque dans la file jusqu'a ce
-                // qu'il passe : c'est le comportement du site, on le respecte.
-                .setTitle(if (isInked) "🐙 Titre surprise" else name)
-                .setSubtitle(if (isInked) "Ajouté par ${addedBy ?: "quelqu'un"}" else subtitle)
-                .setArtist(artistLabel)
-                .setAlbumTitle(albumName)
-                .setArtworkUri(imageUrl?.let { Uri.parse(it) })
-                .setIsBrowsable(false)
-                .setIsPlayable(true)
-                .setMediaType(MediaMetadata.MEDIA_TYPE_MUSIC)
-                .build()
-        )
+        .setMediaMetadata(trackMetadata(subtitle))
         .build()
 }
+
+/**
+ * Un titre « encré » ne doit rien laisser filtrer : ni son nom, ni son artiste,
+ * ni sa pochette. Afficher la vraie image permettait de reconnaître le morceau
+ * avant qu'il ne passe.
+ */
+internal fun Track.trackMetadata(subtitle: String): MediaMetadata =
+    MediaMetadata.Builder()
+        .setTitle(if (isInked) "🐙 Titre surprise" else name)
+        .setSubtitle(if (isInked) "Ajouté par ${addedBy ?: "quelqu'un"}" else subtitle)
+        .setArtist(if (isInked) "Surprise" else artistLabel)
+        .setAlbumTitle(if (isInked) null else albumName)
+        .apply {
+            if (isInked) {
+                setArtworkData(OctopusArtwork.pngBytes, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
+            } else {
+                setArtworkUri(imageUrl?.let { Uri.parse(it) })
+            }
+        }
+        .setIsBrowsable(false)
+        .setIsPlayable(true)
+        .setMediaType(MediaMetadata.MEDIA_TYPE_MUSIC)
+        .build()
 
 internal fun Playlist.toMediaItem(): MediaItem = MediaItem.Builder()
     .setMediaId(MediaId.playlist(id))

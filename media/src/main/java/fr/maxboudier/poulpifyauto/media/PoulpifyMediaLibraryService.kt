@@ -12,6 +12,7 @@ import androidx.media3.session.SessionResult
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
+import fr.maxboudier.poulpifyauto.core.data.QrCodeGenerator
 import fr.maxboudier.poulpifyauto.core.session.PoulpifyGraph
 import fr.maxboudier.poulpifyauto.core.session.SessionCoordinator
 import kotlinx.coroutines.CoroutineScope
@@ -96,6 +97,7 @@ class PoulpifyMediaLibraryService : MediaLibraryService() {
                 .buildUpon()
                 .add(SessionCommand(CMD_TOGGLE_LOCK, Bundle.EMPTY))
                 .add(SessionCommand(CMD_HOST_SKIP, Bundle.EMPTY))
+                .add(SessionCommand(CMD_VOTE_SKIP, Bundle.EMPTY))
                 .build()
 
             return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
@@ -118,6 +120,11 @@ class PoulpifyMediaLibraryService : MediaLibraryService() {
                 }
                 CMD_HOST_SKIP -> {
                     coordinator.hostSkip()
+                    SessionResult(SessionResult.RESULT_SUCCESS)
+                }
+                CMD_VOTE_SKIP -> {
+                    coordinator.voteSkip()
+                    session.setCustomLayout(customLayout())
                     SessionResult(SessionResult.RESULT_SUCCESS)
                 }
                 else -> SessionResult(SessionResult.RESULT_ERROR_NOT_SUPPORTED)
@@ -286,6 +293,8 @@ class PoulpifyMediaLibraryService : MediaLibraryService() {
                     ui.passengers.map { infoItem("passenger_${it.name}", "${it.emoji} ${it.name}") }
                 }
 
+            parentId == MediaId.NODE_INVITE -> inviteItems()
+
             parentId == MediaId.NODE_PLAYLISTS -> ui.playlists.map { it.toMediaItem() }
             parentId == MediaId.NODE_LIKED -> ui.likedTracks.map { it.toMediaItem(MediaId.queueAdd(it.uri)) }
             parentId == MediaId.NODE_TOP -> ui.topTracks.map { it.toMediaItem(MediaId.queueAdd(it.uri)) }
@@ -335,11 +344,46 @@ class PoulpifyMediaLibraryService : MediaLibraryService() {
             browsableNode(MediaId.NODE_TOP, "Top titres"),
             browsableNode(MediaId.NODE_RECENT, "Écoutés récemment"),
             browsableNode(MediaId.NODE_PASSENGERS, "Passagers", "${ui.passengers.size} à bord"),
+            browsableNode(MediaId.NODE_INVITE, "Inviter un passager", "Afficher le QR code"),
+        )
+    }
+
+    /**
+     * QR d'invitation dans la navigation média.
+     *
+     * Le tableau de bord Car App Library a déjà un écran dédié, mais il n'est
+     * pas atteignable depuis l'application média : un conducteur qui reste dans
+     * la surface média n'aurait aucun moyen de faire rejoindre ses passagers.
+     * La pochette de l'unique élément porte le QR.
+     */
+    private fun inviteItems(): List<MediaItem> {
+        val url = coordinator.state.value.shareUrl
+            ?: return listOf(infoItem("no_url", "Aucun serveur configuré"))
+
+        val qr = QrCodeGenerator.generatePng(url, QR_SIZE_PX)
+            ?: return listOf(infoItem("qr_failed", url, "Saisis cette adresse dans un navigateur"))
+
+        return listOf(
+            MediaItem.Builder()
+                .setMediaId("${MediaId.PREFIX_INFO}invite")
+                .setMediaMetadata(
+                    androidx.media3.common.MediaMetadata.Builder()
+                        .setTitle("Scanne pour rejoindre 🐙")
+                        .setSubtitle(url)
+                        .setArtworkData(qr, androidx.media3.common.MediaMetadata.PICTURE_TYPE_FRONT_COVER)
+                        .setIsBrowsable(false)
+                        .setIsPlayable(false)
+                        .build()
+                )
+                .build()
         )
     }
 
     private fun customLayout(): ImmutableList<CommandButton> {
-        val locked = coordinator.state.value.queueLocked
+        val ui = coordinator.state.value
+        val locked = ui.queueLocked
+        val votes = ui.votes.current
+        val required = ui.votes.required
         return ImmutableList.of(
             CommandButton.Builder()
                 .setDisplayName(if (locked) "Déverrouiller la file" else "Verrouiller la file")
@@ -354,11 +398,20 @@ class PoulpifyMediaLibraryService : MediaLibraryService() {
                 .setIconResId(android.R.drawable.ic_media_next)
                 .setSessionCommand(SessionCommand(CMD_HOST_SKIP, Bundle.EMPTY))
                 .build(),
+            // L'hote peut aussi voter comme un passager, plutot que d'imposer
+            // le saut : le decompte rend le vote lisible sans ouvrir un ecran.
+            CommandButton.Builder()
+                .setDisplayName("Voter pour passer ($votes/$required)")
+                .setIconResId(android.R.drawable.ic_menu_sort_by_size)
+                .setSessionCommand(SessionCommand(CMD_VOTE_SKIP, Bundle.EMPTY))
+                .build(),
         )
     }
 
     companion object {
         private const val CMD_TOGGLE_LOCK = "fr.maxboudier.poulpifyauto.TOGGLE_LOCK"
         private const val CMD_HOST_SKIP = "fr.maxboudier.poulpifyauto.HOST_SKIP"
+        private const val CMD_VOTE_SKIP = "fr.maxboudier.poulpifyauto.VOTE_SKIP"
+        private const val QR_SIZE_PX = 512
     }
 }

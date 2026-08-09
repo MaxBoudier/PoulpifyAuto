@@ -1,4 +1,4 @@
-package fr.maxboudier.poulpifyauto.car
+package fr.maxboudier.poulpifyauto.core.data
 
 import android.graphics.Bitmap
 import android.graphics.Color
@@ -34,4 +34,20 @@ object QrCodeGenerator {
             setPixels(pixels, 0, sizePx, 0, 0, sizePx, sizePx)
         }
     }.getOrNull()
+
+    /**
+     * Même QR, encodé en PNG.
+     *
+     * La navigation média d'Android Auto charge les pochettes depuis un autre
+     * processus : elle a besoin d'octets embarqués, une `Bitmap` en mémoire ne
+     * lui servirait à rien.
+     */
+    fun generatePng(content: String, sizePx: Int): ByteArray? {
+        val bitmap = generate(content, sizePx) ?: return null
+        return java.io.ByteArrayOutputStream().use { out ->
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+            bitmap.recycle()
+            out.toByteArray()
+        }
+    }
 }

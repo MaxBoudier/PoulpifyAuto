@@ -27,6 +27,9 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.kotlinx.coroutines.android)
+    // QR d'invitation genere a la volee, partage par les surfaces voiture
+    // (templates et navigation media) : il vit donc ici et non dans :car.
+    implementation(libs.zxing.core)
 
     testImplementation(libs.junit)
 }

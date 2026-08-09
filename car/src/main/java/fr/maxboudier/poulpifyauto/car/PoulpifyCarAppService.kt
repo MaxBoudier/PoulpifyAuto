@@ -7,6 +7,8 @@ import androidx.car.app.Session
 import androidx.car.app.validation.HostValidator
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import fr.maxboudier.poulpifyauto.car.screens.DashboardScreen
 import fr.maxboudier.poulpifyauto.core.session.PoulpifyGraph
 
@@ -37,6 +39,15 @@ class PoulpifySession : Session() {
         // Android Auto detruit l'ecran, sans quoi le compteur de references
         // ne redescendrait jamais a zero.
         lifecycle.addObserver(object : DefaultLifecycleObserver {
+            override fun onCreate(owner: LifecycleOwner) {
+                // Les notifications ne valent que pendant que la voiture est
+                // connectee : on s'abonne au cycle de vie de la session.
+                val notifier = CarNotifier(carContext)
+                owner.lifecycleScope.launch {
+                    PoulpifyGraph.coordinator.events.collect { notifier.notify(it) }
+                }
+            }
+
             override fun onDestroy(owner: LifecycleOwner) {
                 PoulpifyGraph.coordinator.release()
             }

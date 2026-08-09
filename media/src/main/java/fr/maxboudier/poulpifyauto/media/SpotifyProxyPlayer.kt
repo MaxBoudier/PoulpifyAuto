@@ -84,25 +84,16 @@ class SpotifyProxyPlayer(
             .setIsLoading(false)
 
         if (track != null) {
-            builder.setPlaylist(
-                listOf(
-                    MediaItemData.Builder(track.uri)
-                        .setMediaItem(
-                            MediaItem.Builder()
-                                .setMediaId(track.uri)
-                                .setUri(track.uri)
-                                .setMediaMetadata(track.toMediaMetadata())
-                                .build()
-                        )
-                        .setMediaMetadata(track.toMediaMetadata())
-                        .setDurationUs(
-                            if (track.durationMs > 0) track.durationMs * 1000 else C.TIME_UNSET
-                        )
-                        .setIsSeekable(playback.canSeek)
-                        .setIsDynamic(false)
-                        .build()
-                )
-            )
+            // Le bouton « Queue » d'Android Auto affiche la timeline du lecteur.
+            // Ne publier que le titre courant, comme avant, la laissait vide :
+            // on expose donc le titre en cours suivi de toute la file Poulpify.
+            val playlist = buildList {
+                add(mediaItemData(track, seekable = playback.canSeek, index = 0))
+                ui.queue.forEachIndexed { position, queued ->
+                    add(mediaItemData(queued, seekable = false, index = position + 1))
+                }
+            }
+            builder.setPlaylist(playlist)
             builder.setCurrentMediaItemIndex(0)
             // Fournisseur plutot que valeur figee : la position est interpolee
             // a la demande, sans forcer une invalidation d'etat deux fois par
@@ -111,6 +102,31 @@ class SpotifyProxyPlayer(
         }
 
         return builder.build()
+    }
+
+    /**
+     * L'identifiant inclut la position : un même titre peut figurer deux fois
+     * dans la file, et media3 exige des `uid` distincts.
+     */
+    private fun mediaItemData(
+        track: fr.maxboudier.poulpifyauto.core.model.Track,
+        seekable: Boolean,
+        index: Int,
+    ): MediaItemData {
+        val metadata = track.toMediaMetadata()
+        return MediaItemData.Builder("$index:${track.uri}")
+            .setMediaItem(
+                MediaItem.Builder()
+                    .setMediaId(track.uri)
+                    .setUri(track.uri)
+                    .setMediaMetadata(metadata)
+                    .build()
+            )
+            .setMediaMetadata(metadata)
+            .setDurationUs(if (track.durationMs > 0) track.durationMs * 1000 else C.TIME_UNSET)
+            .setIsSeekable(seekable)
+            .setIsDynamic(false)
+            .build()
     }
 
     override fun handleSetPlayWhenReady(playWhenReady: Boolean): ListenableFuture<*> =
@@ -166,17 +182,15 @@ class SpotifyProxyPlayer(
     }
 }
 
+/**
+ * Réutilise la fabrique commune : sans cela, un titre encré présent dans la
+ * file laisserait fuiter sa pochette par le bouton « Queue », alors même
+ * qu'elle est masquée dans la navigation.
+ */
 private fun fr.maxboudier.poulpifyauto.core.model.Track.toMediaMetadata(): MediaMetadata {
     val subtitle = buildString {
         append(artistLabel)
         addedBy?.let { append(" • ajouté par $it") }
     }
-    return MediaMetadata.Builder()
-        .setTitle(name)
-        .setArtist(subtitle)
-        .setAlbumTitle(albumName)
-        .setArtworkUri(imageUrl?.let { android.net.Uri.parse(it) })
-        .setIsBrowsable(false)
-        .setIsPlayable(true)
-        .build()
+    return trackMetadata(subtitle)
 }
