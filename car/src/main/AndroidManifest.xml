@@ -2,9 +2,16 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <application>
+        <!--
+            Niveau 1 : toutes les API utilisees (ListTemplate, GridTemplate,
+            ConstraintManager, CarAppExtender) existent depuis cette version.
+            Declarer plus haut excluait sans contrepartie les autoradios plus
+            anciens, alors que le Desktop Head Unit, lui, tourne toujours au
+            dernier niveau et ne revelait donc jamais le probleme.
+        -->
         <meta-data
             android:name="androidx.car.app.minCarApiLevel"
-            android:value="5" />
+            android:value="1" />
 
         <service
             android:name="fr.maxboudier.poulpifyauto.car.PoulpifyCarAppService"

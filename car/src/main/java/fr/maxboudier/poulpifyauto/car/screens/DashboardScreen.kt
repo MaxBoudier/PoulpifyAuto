@@ -3,7 +3,6 @@ package fr.maxboudier.poulpifyauto.car.screens
 import androidx.car.app.CarContext
 import androidx.car.app.model.Action
 import androidx.car.app.model.ActionStrip
-import androidx.car.app.model.Header
 import androidx.car.app.model.ItemList
 import androidx.car.app.model.ListTemplate
 import androidx.car.app.model.Row
@@ -98,12 +97,8 @@ class DashboardScreen(carContext: CarContext) : PoulpifyScreen(carContext) {
         }.build()
 
         return ListTemplate.Builder()
-            .setHeader(
-                Header.Builder()
-                    .setTitle("Poulpify 🐙")
-                    .setStartHeaderAction(Action.APP_ICON)
-                    .build()
-            )
+            .setTitle("Poulpify 🐙")
+            .setHeaderAction(Action.APP_ICON)
             .setSingleList(list)
             .setActionStrip(actionStrip(ui))
             .build()

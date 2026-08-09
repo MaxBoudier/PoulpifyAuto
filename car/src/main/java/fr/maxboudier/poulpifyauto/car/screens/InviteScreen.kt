@@ -5,7 +5,6 @@ import androidx.car.app.model.Action
 import androidx.car.app.model.CarIcon
 import androidx.car.app.model.GridItem
 import androidx.car.app.model.GridTemplate
-import androidx.car.app.model.Header
 import androidx.car.app.model.ItemList
 import androidx.car.app.model.MessageTemplate
 import androidx.car.app.model.Template
@@ -42,20 +41,20 @@ class InviteScreen(carContext: CarContext) : PoulpifyScreen(carContext) {
             .build()
 
         return GridTemplate.Builder()
-            .setHeader(header())
-            .setItemSize(GridTemplate.ITEM_SIZE_LARGE)
+            .setTitle("Inviter un passager")
+            .setHeaderAction(Action.BACK)
+            // Pas de `setItemSize` : l'API est marquee experimentale et peut
+            // etre refusee par un autoradio ancien. `IMAGE_TYPE_LARGE` sur
+            // l'element suffit a obtenir un rendu genereux, en API stable.
             .setSingleList(ItemList.Builder().addItem(item).build())
             .build()
     }
 
-    private fun header() = Header.Builder()
-        .setTitle("Inviter un passager")
-        .setStartHeaderAction(Action.BACK)
-        .build()
-
     /** Repli lisible : au pire, le passager saisit l'adresse à la main. */
-    private fun message(text: String): Template =
-        MessageTemplate.Builder(text).setHeader(header()).build()
+    private fun message(text: String): Template = MessageTemplate.Builder(text)
+        .setTitle("Inviter un passager")
+        .setHeaderAction(Action.BACK)
+        .build()
 
     companion object {
         /**

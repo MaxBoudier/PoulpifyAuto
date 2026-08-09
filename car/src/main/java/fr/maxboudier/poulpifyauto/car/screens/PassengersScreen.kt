@@ -2,7 +2,6 @@ package fr.maxboudier.poulpifyauto.car.screens
 
 import androidx.car.app.CarContext
 import androidx.car.app.model.Action
-import androidx.car.app.model.Header
 import androidx.car.app.model.ItemList
 import androidx.car.app.model.ListTemplate
 import androidx.car.app.model.Row
@@ -32,12 +31,8 @@ class PassengersScreen(carContext: CarContext) : PoulpifyScreen(carContext) {
         }.build()
 
         return ListTemplate.Builder()
-            .setHeader(
-                Header.Builder()
-                    .setTitle("Passagers (${passengers.size})")
-                    .setStartHeaderAction(Action.BACK)
-                    .build()
-            )
+            .setTitle("Passagers (${passengers.size})")
+            .setHeaderAction(Action.BACK)
             .setSingleList(list)
             .build()
     }

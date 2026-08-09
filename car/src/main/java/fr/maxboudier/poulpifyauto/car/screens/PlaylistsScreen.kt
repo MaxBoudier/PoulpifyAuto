@@ -2,7 +2,6 @@ package fr.maxboudier.poulpifyauto.car.screens
 
 import androidx.car.app.CarContext
 import androidx.car.app.model.Action
-import androidx.car.app.model.Header
 import androidx.car.app.model.ItemList
 import androidx.car.app.model.ListTemplate
 import androidx.car.app.model.Row
@@ -40,12 +39,8 @@ class PlaylistsScreen(carContext: CarContext) : PoulpifyScreen(carContext) {
         }.build()
 
         return ListTemplate.Builder()
-            .setHeader(
-                Header.Builder()
-                    .setTitle("Mes playlists")
-                    .setStartHeaderAction(Action.BACK)
-                    .build()
-            )
+            .setTitle("Mes playlists")
+            .setHeaderAction(Action.BACK)
             .setSingleList(list)
             .build()
     }
@@ -77,12 +72,8 @@ class PlaylistTracksScreen(
     override fun onGetTemplate(): Template {
         if (loading) {
             return ListTemplate.Builder()
-                .setHeader(
-                    Header.Builder()
-                        .setTitle(playlist.name)
-                        .setStartHeaderAction(Action.BACK)
-                        .build()
-                )
+                .setTitle(playlist.name)
+            .setHeaderAction(Action.BACK)
                 .setLoading(true)
                 .build()
         }
@@ -120,12 +111,8 @@ class PlaylistTracksScreen(
         }.build()
 
         return ListTemplate.Builder()
-            .setHeader(
-                Header.Builder()
-                    .setTitle(playlist.name)
-                    .setStartHeaderAction(Action.BACK)
-                    .build()
-            )
+            .setTitle(playlist.name)
+            .setHeaderAction(Action.BACK)
             .setSingleList(list)
             .build()
     }

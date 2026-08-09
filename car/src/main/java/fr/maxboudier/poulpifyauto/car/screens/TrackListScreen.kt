@@ -2,7 +2,6 @@ package fr.maxboudier.poulpifyauto.car.screens
 
 import androidx.car.app.CarContext
 import androidx.car.app.model.Action
-import androidx.car.app.model.Header
 import androidx.car.app.model.ItemList
 import androidx.car.app.model.ListTemplate
 import androidx.car.app.model.Row
@@ -48,12 +47,8 @@ class TrackListScreen(
         }.build()
 
         return ListTemplate.Builder()
-            .setHeader(
-                Header.Builder()
-                    .setTitle(title)
-                    .setStartHeaderAction(Action.BACK)
-                    .build()
-            )
+            .setTitle(title)
+            .setHeaderAction(Action.BACK)
             .setSingleList(list)
             .build()
     }

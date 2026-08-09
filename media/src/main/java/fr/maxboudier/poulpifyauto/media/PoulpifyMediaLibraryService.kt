@@ -122,11 +122,6 @@ class PoulpifyMediaLibraryService : MediaLibraryService() {
                 .add(SessionCommand(CMD_VOTE_SKIP, Bundle.EMPTY))
                 .build()
 
-            android.util.Log.i(
-                "PoulpifyMedia",
-                "onConnect pkg=${controller.packageName} v=${controller.controllerVersion} " +
-                    "boutons=${customLayout().size} cmds=${sessionCommands.commands.size}",
-            )
             return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
                 .setAvailableSessionCommands(sessionCommands)
                 // `setMediaButtonPreferences` et non `setCustomLayout` : c'est
@@ -157,7 +152,7 @@ class PoulpifyMediaLibraryService : MediaLibraryService() {
                     session.setMediaButtonPreferences(customLayout())
                     SessionResult(SessionResult.RESULT_SUCCESS)
                 }
-                else -> SessionResult(SessionResult.RESULT_ERROR_NOT_SUPPORTED)
+                else -> SessionResult(androidx.media3.session.SessionError.ERROR_NOT_SUPPORTED)
             }
         }
 
@@ -181,7 +176,7 @@ class PoulpifyMediaLibraryService : MediaLibraryService() {
                     ?.toMediaItem(mediaId)
             }
             if (item != null) LibraryResult.ofItem(item, null)
-            else LibraryResult.ofError(LibraryResult.RESULT_ERROR_BAD_VALUE)
+            else LibraryResult.ofError(androidx.media3.session.SessionError.ERROR_BAD_VALUE)
         }
 
         override fun onGetChildren(
