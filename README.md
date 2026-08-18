@@ -173,3 +173,12 @@ Deux versions sont épinglées volontairement, avec la raison en commentaire dan
 Depuis AGP 9, le plugin Kotlin est intégré : les modules Android ne doivent
 **pas** appliquer `org.jetbrains.kotlin.android`, et les modules JVM référencent
 `org.jetbrains.kotlin.jvm` sans version.
+
+---
+
+## 📝 Licence & Avertissement
+
+Distribué sous licence MIT. Voir [`LICENSE`](./LICENSE) pour plus d'informations.
+
+> **Note / Disclaimer :** Ce projet est un projet personnel open-source et n'est ni affilié, ni sponsorisé, ni approuvé par Spotify AB ou Google LLC. Spotify et Android Auto sont des marques déposées de leurs propriétaires respectifs. L'application intègre le SDK officiel Spotify App Remote.
+
